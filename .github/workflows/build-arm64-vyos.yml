@@ -37,7 +37,26 @@ jobs:
           # 更新包索引
           sudo apt-get update
           
-          # 安装系统工具 (将grub-efi-arm64替换为grub2-common)
+          - name: Install GRUB for ARM64
+            run: |
+              # 查找可用的ARM64 GRUB包
+              echo "查找可用的ARM64 GRUB包..."
+              apt-cache search grub | grep -i arm64 || true
+              
+              # 尝试从各种可能的源安装GRUB
+              # 方法1: 标准包
+              sudo apt-get install -y grub-efi-arm64-bin || \
+              # 方法2: 签名包
+              sudo apt-get install -y grub-efi-arm64-signed || \
+              # 方法3: 使用通用包
+              sudo apt-get install -y grub-common grub2-common grub-efi-arm64 || \
+              # 方法4: 从universe仓库
+              (sudo add-apt-repository universe && sudo apt-get update && sudo apt-get install -y grub-efi-arm64-bin) || \
+              # 如果全都失败，记录错误但继续执行
+              echo "无法安装ARM64 GRUB包，后续构建可能会失败"
+              
+              # 手动创建GRUB所需目录
+              sudo mkdir -p /usr/lib/grub/arm64-efi/
           sudo apt-get install -y qemu-utils parted xz-utils dosfstools squashfs-tools git \
             python3-cracklib build-essential debhelper libpam-dev libnss3-dev uuid-dev \
             libssl-dev grub2-common e2fsprogs debootstrap
@@ -79,10 +98,22 @@ jobs:
         run: |
           # 查找可用的ARM64 GRUB包
           echo "查找可用的ARM64 GRUB包..."
-          apt-cache search grub | grep -i arm64
+          apt-cache search grub | grep -i arm64 || true
           
-          # 尝试安装替代包
-          sudo apt-get install -y grub-efi-arm64-bin || sudo apt-get install -y grub-efi-arm64-signed || echo "无法安装ARM64 GRUB包"
+          # 尝试从各种可能的源安装GRUB
+          # 方法1: 标准包
+          sudo apt-get install -y grub-efi-arm64-bin || \
+          # 方法2: 签名包
+          sudo apt-get install -y grub-efi-arm64-signed || \
+          # 方法3: 使用通用包
+          sudo apt-get install -y grub-common grub2-common grub-efi-arm64 || \
+          # 方法4: 从universe仓库
+          (sudo add-apt-repository universe && sudo apt-get update && sudo apt-get install -y grub-efi-arm64-bin) || \
+          # 如果全都失败，记录错误但继续执行
+          echo "无法安装ARM64 GRUB包，后续构建可能会失败"
+          
+          # 手动创建GRUB所需目录
+          sudo mkdir -p /usr/lib/grub/arm64-efi/
 
       - name: Fix Python path for cracklib
         run: |
