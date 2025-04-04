@@ -2,14 +2,22 @@ name: Build VyOS ARM64 Image
 
 on:
   workflow_dispatch:
+    inputs:
+      release_name:
+        description: '发布版本名称(可选)'
+        required: false
+        default: 'VyOS ARM64 自动构建'
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Checkout vyos-build
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: vyos/vyos-build
           ref: current
@@ -29,10 +37,17 @@ jobs:
 
       - name: Generate version tag
         id: version
-        run: echo "::set-output name=tag::vyos-arm64-$(date +'%Y%m%d')"
+        run: echo "tag=vyos-arm64-$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
 
       - name: Package to bootable disk image
         run: |
+          # 确保构建脚本存在
+          if [ ! -f ./scripts/build_image.sh ]; then
+            echo "构建脚本不存在，正在检查目录结构..."
+            find . -name "build_image.sh" -type f
+            exit 1
+          fi
+          
           chmod +x ./scripts/build_image.sh
           ./scripts/build_image.sh ./vyos-build/build/*/vyos-*.squashfs
 
@@ -40,14 +55,27 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ inputs.release_name || format('VyOS ARM64 构建 - {0}', steps.version.outputs.tag) }}
+          body: |
+            VyOS ARM64 自动构建版本 - ${{ steps.version.outputs.tag }}
+            
+            包含以下文件:
+            - vyos-arm64.img - 可直接写入SD卡/eMMC的原始镜像
+            - vyos-arm64.qcow2 - QEMU/KVM虚拟机兼容格式
+            
+            构建时间: ${{ github.event.repository.updated_at }}
+          files: |
+            vyos-arm64.img
+            vyos-arm64.qcow2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
 
       - name: Upload image as artifact (optional backup)
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: vyos-arm64-disk
           path: |
             vyos-arm64.img
             vyos-arm64.qcow2
+          retention-days: 7
