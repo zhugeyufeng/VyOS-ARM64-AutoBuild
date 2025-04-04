@@ -23,10 +23,26 @@ jobs:
           ref: current
           path: vyos-build
 
-      - name: Setup build tools
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v2
+
+      - name: Setup other build tools
         run: |
-          sudo apt update
-          sudo apt install -y docker.io qemu-utils parted xz-utils dosfstools squashfs-tools
+          # 更新包索引
+          sudo apt-get update
+          
+          # 安装除Docker以外的其他必要工具
+          sudo apt-get install -y qemu-utils parted xz-utils dosfstools squashfs-tools
+          
+          # 验证工具已安装
+          echo "检查必要工具是否已安装:"
+          for tool in docker qemu-img parted xz mkfs.vfat mksquashfs; do
+            if command -v $tool >/dev/null 2>&1; then
+              echo "$tool: 已安装"
+            else
+              echo "$tool: 未安装 (如果是docker，可能由setup-buildx-action提供)"
+            fi
+          done
 
       - name: Build ARM64 squashfs (in Docker)
         run: |
