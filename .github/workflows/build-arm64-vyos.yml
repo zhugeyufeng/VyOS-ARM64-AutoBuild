@@ -26,20 +26,34 @@ jobs:
       - name: Setup Docker
         uses: docker/setup-buildx-action@v2
 
+      - name: Configure Docker permissions
+        run: |
+          sudo usermod -aG docker $USER
+          # 确保Docker可以正常工作
+          docker info
+
       - name: Install build dependencies
         run: |
           # 更新包索引
           sudo apt-get update
           
           # 安装系统工具
-          sudo apt-get install -y qemu-utils parted xz-utils dosfstools squashfs-tools git
+          sudo apt-get install -y qemu-utils parted xz-utils dosfstools squashfs-tools git \
+            python3-cracklib build-essential debhelper libpam-dev libnss3-dev uuid-dev \
+            libssl-dev grub2-common grub-efi-arm64 e2fsprogs debootstrap
           
           # 安装Python依赖
           sudo pip3 install tomli jinja2 gitpython
           
+          # 如果未通过pip安装python-cracklib，使用系统包
+          if ! python3 -c "import cracklib" 2>/dev/null; then
+            echo "尝试使用apt安装cracklib..."
+            sudo apt-get install -y python3-cracklib
+          fi
+          
           # 验证工具已安装
           echo "检查必要工具是否已安装:"
-          for tool in docker qemu-img parted xz mkfs.vfat mksquashfs git; do
+          for tool in docker qemu-img parted xz mkfs.vfat mksquashfs git grub-install; do
             if command -v $tool >/dev/null 2>&1; then
               echo "$tool: 已安装"
             else
@@ -49,7 +63,7 @@ jobs:
           
           # 验证Python模块已安装
           echo "检查必要Python模块是否已安装:"
-          for module in tomli jinja2 git; do
+          for module in tomli jinja2 git cracklib; do
             if python3 -c "import $module" 2>/dev/null; then
               echo "$module: 已安装"
             else
@@ -58,10 +72,22 @@ jobs:
             fi
           done
 
+      - name: Fix Python path for cracklib
+        run: |
+          # 查找cracklib模块位置
+          CRACKLIB_PATH=$(find /usr/lib/ -name "cracklib.*.so" 2>/dev/null)
+          if [ ! -z "$CRACKLIB_PATH" ]; then
+            CRACKLIB_DIR=$(dirname "$CRACKLIB_PATH")
+            echo "Found cracklib at: $CRACKLIB_DIR"
+            export PYTHONPATH=$PYTHONPATH:$CRACKLIB_DIR
+          fi
+
       - name: Build ARM64 squashfs (in Docker)
         run: |
           cd vyos-build
-          sudo make docker-arm64
+          # 设置Python路径，确保可以找到所有模块
+          export PYTHONPATH=$PYTHONPATH:$(pwd):$(pwd)/build/vyos-1x/python
+          sudo -E make docker-arm64
           sudo ./configure --architecture arm64
           sudo make image
 
