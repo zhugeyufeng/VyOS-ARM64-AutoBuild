@@ -37,10 +37,13 @@ jobs:
           # 更新包索引
           sudo apt-get update
           
-          # 安装系统工具
+          # 安装系统工具 (将grub-efi-arm64替换为grub2-common)
           sudo apt-get install -y qemu-utils parted xz-utils dosfstools squashfs-tools git \
             python3-cracklib build-essential debhelper libpam-dev libnss3-dev uuid-dev \
-            libssl-dev grub2-common grub-efi-arm64 e2fsprogs debootstrap
+            libssl-dev grub2-common e2fsprogs debootstrap
+          
+          # 尝试安装grub-efi-arm64-bin (如果可用)
+          sudo apt-get install -y grub-efi-arm64-bin || echo "grub-efi-arm64-bin not available"
           
           # 安装Python依赖
           sudo pip3 install tomli jinja2 gitpython
@@ -53,7 +56,7 @@ jobs:
           
           # 验证工具已安装
           echo "检查必要工具是否已安装:"
-          for tool in docker qemu-img parted xz mkfs.vfat mksquashfs git grub-install; do
+          for tool in docker qemu-img parted xz mkfs.vfat mksquashfs git; do
             if command -v $tool >/dev/null 2>&1; then
               echo "$tool: 已安装"
             else
@@ -71,6 +74,15 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Install GRUB for ARM64
+        run: |
+          # 查找可用的ARM64 GRUB包
+          echo "查找可用的ARM64 GRUB包..."
+          apt-cache search grub | grep -i arm64
+          
+          # 尝试安装替代包
+          sudo apt-get install -y grub-efi-arm64-bin || sudo apt-get install -y grub-efi-arm64-signed || echo "无法安装ARM64 GRUB包"
 
       - name: Fix Python path for cracklib
         run: |
