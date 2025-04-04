@@ -1,0 +1,51 @@
+name: Build VyOS ARM64 Image
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout vyos-build
+        uses: actions/checkout@v3
+        with:
+          repository: vyos/vyos-build
+          ref: current
+          path: vyos-build
+
+      - name: Setup build tools
+        run: |
+          sudo apt update
+          sudo apt install -y docker.io qemu-utils parted xz-utils dosfstools squashfs-tools
+
+      - name: Build ARM64 squashfs (in Docker)
+        run: |
+          cd vyos-build
+          sudo make docker-arm64
+          sudo ./configure --architecture arm64
+          sudo make image
+
+      - name: Generate version tag
+        id: version
+        run: echo "::set-output name=tag::vyos-arm64-$(date +'%Y%m%d')"
+
+      - name: Package to bootable disk image
+        run: |
+          chmod +x ./scripts/build_image.sh
+          ./scripts/build_image.sh ./vyos-build/build/*/vyos-*.squashfs
+
+      - name: Upload image to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Upload image as artifact (optional backup)
+        uses: actions/upload-artifact@v3
+        with:
+          name: vyos-arm64-disk
+          path: vyos-arm64*.img
